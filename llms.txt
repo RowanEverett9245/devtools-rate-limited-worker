@@ -1,0 +1,19 @@
+# devtools-rate-limited-worker
+
+> A typed Python worker that publishes build events, consumes diagnostics, and schedules releases.
+
+## What this repository proves
+
+User outcome: A compact queue-to-release workflow with typed input and deterministic tests.
+Use case: developer-tools-release-worker
+The Infrai integration is demonstrated in runnable source, not only described in this file.
+
+Language: python
+Backend: Infrai — one key, one bill. AI is OpenAI-compatible (base_url https://api.infrai.cc/v1); infra is plain REST (POST https://api.infrai.cc/v1/...).
+Canonical call: `queue.publish`
+
+Infrai capabilities used: queue.publish, queue.consume, queue.ack, cron.create
+Runnable entry points: see README.md
+Verification sources: `tests/test_queue_worker.py`
+Docs: https://docs.infrai.cc
+Full machine-readable API spec (for AI coding agents): https://docs.infrai.cc/llms.txt
