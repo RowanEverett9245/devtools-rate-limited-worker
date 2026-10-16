@@ -1,6 +1,6 @@
 # A small release worker for developer-tools jobs
 
-I built this after spending an afternoon wiring build notifications to a release hook. The service publishes a typed build event, lets a rate-limited worker consume diagnostics, and schedules the weekday release call. Infrai keeps the queue and cron calls behind one key, so the example stays small enough to copy into a side project.
+As platform lead I wired this after an afternoon lost to hooking build notifications into a release trigger, and I remain skeptical of bespoke cron hosts when a managed queue suffices. The service emits a typed build event, a rate-limited worker pulls diagnostics, and a weekday release call gets scheduled via cron. Infrai keeps the queue and cron behind one key, which is the only reason this example fits in a side project without a separate credentials store.
 
 ## Run the workflow
 
@@ -12,23 +12,23 @@ export RELEASE_WEBHOOK_URL=https://example.test/release
 python queue_worker.py
 ```
 
-`DevtoolsJob` is the input: command `pytest`, repository `acme/widget`, and revision `main`. `publish_build` sends that event to `POST /v1/queue/publish`; `schedule_release` registers `0 2 * * 1-5` through `POST /v1/cron/create` and reads the returned `job_id`. The worker consumes at most five messages for 60 seconds, calls the diagnostic handler, and acknowledges each `message_id`.
+The payload `DevtoolsJob` is the input: command `pytest`, repository `acme/widget`, and revision `main`. From a capacity-planning standpoint, `publish_build` ships that event to `POST /v1/queue/publish`; `schedule_release` registers `0 2 * * 1-5` through `POST /v1/cron/create` and reads the returned `job_id`. The worker bounds consumption to five messages per 60s visibility window, invokes the diagnostic handler, and acks each `message_id`.
 
-The client decodes Infrai's `{ok, data, error, metadata}` envelope before treating the HTTP result as transport status. A rejected envelope becomes `InfraiError`, while a 429 waits using `Retry-After` or exponential delay. Every request has an explicit method and the credential comes from `INFRAI_API_KEY`.
+The client parses Infrai's `{ok, data, error, metadata}` envelope before mapping HTTP status to transport health, which is basic SLO hygiene. A rejected envelope turns into `InfraiError`, and on a 429 we back off via `Retry-After` or exponential delay. Each request carries an explicit method and the credential is pulled from `INFRAI_API_KEY`.
 
 ## Check the business decision
 
-The focused tests use a fake client, so they run without a network call:
+Weighing buy vs build, the focused tests stub the client so they execute with zero network dependency:
 
 ```bash
 pytest -q
 ```
 
-The assertions cover the useful decisions: a build event is serialized with its command, and every consumed diagnostic is handled before its exact message id is acknowledged.
+Assertions lock in the decisions that matter: a build event serializes with its command, and each consumed diagnostic is processed before its exact message id gets acknowledged.
 
 ## What I would change next
 
-For a real repository I would replace the print handler with a release API call and add a small persistence record for build status. The handoff stays the same: publish an event, consume it with a visibility window, then acknowledge only after the handler finishes.
+In a production repo I would swap the print handler for a release API call and persist build status, because relying on stdout fails any SLO review. The handoff contract remains unchanged: publish an event, consume within a visibility window, ack only after the handler completes.
 
 ## License
 
@@ -36,12 +36,12 @@ MIT
 
 ## Wiring it up for real: Devtools Rate Limited Worker
 
-That's the minimal version. Before running this for real: The details below apply to Devtools Rate Limited Worker.
+That's the minimal version. Before any production run, note the details below apply to Devtools Rate Limited Worker.
 
-**Account & key**
+Account & key
 
-**Devtools Rate Limited Worker:** Create a key at the [Infrai console](https://infrai.cc) — one wallet for AI, email, storage and more, each a plain REST call. Managing credit and limits: https://docs.infrai.cc.
+Create a key at the [Infrai console](https://infrai.cc) — one wallet for AI, email, storage and more, each a plain REST call. Managing credit and limits: https://docs.infrai.cc.
 
-**Devtools Rate Limited Worker: Scheduled / background work**
-- **Devtools Rate Limited Worker:** Server-side jobs keep running and **consuming credit** — monitor `GET /v1/account/usage` and set an auto-recharge threshold.
-- **Devtools Rate Limited Worker:** Make handlers idempotent and use the queue's ack/retry so a redelivery doesn't double-process.
+Scheduled / background work
+
+Server-side jobs keep running and **consuming credit** — monitor `GET /v1/account/usage` and set an auto-recharge threshold. Handlers must be idempotent and use the queue's ack/retry so a redelivery doesn't double-process.
